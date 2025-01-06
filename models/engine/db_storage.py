@@ -1,64 +1,67 @@
 #!/usr/bin/python3
-"""DBStorage Module for HBNB project"""
+"""DBStorage engine using SQLAlchemy"""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models.base_model import Base
 import os
 
-
 class DBStorage:
-    """Database storage engine"""
+    """Database Storage class for MySQL using SQLAlchemy"""
     __engine = None
     __session = None
 
     def __init__(self):
-        """Initialize DBStorage"""
+        """Initialization of the database connection"""
         user = os.getenv('HBNB_MYSQL_USER')
         password = os.getenv('HBNB_MYSQL_PWD')
         host = os.getenv('HBNB_MYSQL_HOST')
         database = os.getenv('HBNB_MYSQL_DB')
-        env = os.getenv('HBNB_ENV')
 
-        self.__engine = create_engine(
-            f'mysql+mysqldb://{user}:{password}@{host}/{database}',
-            pool_pre_ping=True
-        )
-        if env == 'test':
+        self.__engine = create_engine(f'mysql+mysqldb://{user}:{password}@{host}/{database}',
+                                      pool_pre_ping=True)
+
+        # Drop all tables if environment is 'test'
+        if os.getenv('HBNB_ENV') == 'test':
             Base.metadata.drop_all(self.__engine)
 
     def all(self, cls=None):
-        """Query all objects by class or all objects"""
-        results = {}
+        """Query all objects of a class or all objects if no class is specified"""
+        from models import classes
+        obj_dict = {}
         if cls:
-            objects = self.__session.query(cls).all()
+            objs = self.__session.query(cls).all()
+            for obj in objs:
+                key = f"{obj.__class__.__name__}.{obj.id}"
+                obj_dict[key] = obj
         else:
-            from models import classes
-            objects = []
-            for class_type in classes.values():
-                objects.extend(self.__session.query(class_type).all())
-
-        for obj in objects:
-            key = f"{obj.__class__.__name__}.{obj.id}"
-            results[key] = obj
-        return results
+            for cls in classes.values():
+                objs = self.__session.query(cls).all()
+                for obj in objs:
+                    key = f"{obj.__class__.__name__}.{obj.id}"
+                    obj_dict[key] = obj
+        return obj_dict
 
     def new(self, obj):
-        """Add a new object to the session"""
+        """Add a new object to the current database session"""
         self.__session.add(obj)
 
     def save(self):
-        """Commit changes to the session"""
+        """Commit all changes to the database"""
         self.__session.commit()
 
     def delete(self, obj=None):
-        """Delete an object from the session"""
+        """Delete an object from the current session if not None"""
         if obj:
             self.__session.delete(obj)
 
     def reload(self):
-        """Reload the database session"""
+        """Create tables and start a new database session"""
         from models import classes
         Base.metadata.create_all(self.__engine)
         session_factory = sessionmaker(bind=self.__engine, expire_on_commit=False)
-        self.__session = scoped_session(session_factory)
+        self.__session = scoped_session(session_factory)()
+
+    def close(self):
+        """Close the current SQLAlchemy session"""
+        self.__session.close()
 

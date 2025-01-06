@@ -6,18 +6,18 @@ from sqlalchemy.orm import relationship
 from models.city import City
 import models
 
+
 class State(BaseModel, Base):
     """State class"""
-    __tablename__ = "states"
+    __tablename__ = 'states'
     name = Column(String(128), nullable=False)
-    cities = relationship("City", backref="state", cascade="all, delete")
+    cities = relationship("City", backref="state", cascade="all, delete, delete-orphan")
 
-    if models.storage.__class__.__name__ != "DBStorage":
-        @property
-        def cities(self):
-            """Getter attribute for cities in FileStorage"""
-            city_list = []
-            for city in models.storage.all(City).values():
-                if city.state_id == self.id:
-                    city_list.append(city)
-            return city_list
+    @property
+    def cities(self):
+        """Getter attribute to return cities for the current state in FileStorage"""
+        if models.storage_type == 'db':
+            return self.cities
+        else:
+            return [city for city in models.storage.all(City).values() if city.state_id == self.id]
+
