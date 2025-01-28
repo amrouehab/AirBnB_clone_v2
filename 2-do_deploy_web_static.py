@@ -2,14 +2,16 @@
 """
 Fabric script to distribute an archive to web servers
 """
-from fabric import task
-import os
+from fabric.api import env, put, run
+import os.path
 
-env.hosts = ['<IP web-01>', 'IP web-02']
+# Define the list of host servers
+env.hosts = ['54.173.103.252', '18.210.20.23']
+env.user = 'ubuntu'
+env.key_filename = ['~/.ssh/id_rsa']
 
 
-@task
-def do_deploy(c, archive_path):
+def do_deploy(archive_path):
     """
     Distributes an archive to web servers
     
@@ -23,33 +25,41 @@ def do_deploy(c, archive_path):
         return False
     
     try:
-        # Upload archive to /tmp/ directory
+        # Get filename from archive path
         file_name = os.path.basename(archive_path)
+        # Remove .tgz extension for folder name
         folder_name = file_name.replace('.tgz', '')
-        remote_path = '/tmp/{}'.format(file_name)
-        release_path = '/data/web_static/releases/{}'.format(folder_name)
+        # Define paths
+        tmp_path = "/tmp/{}".format(file_name)
+        release_path = "/data/web_static/releases/{}".format(folder_name)
         
-        # Upload the archive
-        c.put(archive_path, remote_path)
+        # Upload archive
+        put(archive_path, '/tmp/')
         
-        # Create release directory
-        c.run('mkdir -p {}'.format(release_path))
+        # Create new release directory
+        run('mkdir -p {}/'.format(release_path))
         
-        # Extract archive
-        c.run('tar -xzf {} -C {}'.format(remote_path, release_path))
+        # Extract archive to new release directory
+        run('tar -xzf {} -C {}/'.format(tmp_path, release_path))
         
         # Remove archive
-        c.run('rm {}'.format(remote_path))
+        run('rm {}'.format(tmp_path))
         
         # Move contents to proper location
-        c.run('mv {}/web_static/* {}/'.format(release_path, release_path))
-        c.run('rm -rf {}/web_static'.format(release_path))
+        run('mv {}/web_static/* {}/'.format(release_path, release_path))
         
-        # Remove old current link and create new one
-        c.run('rm -rf /data/web_static/current')
-        c.run('ln -s {} /data/web_static/current'.format(release_path))
+        # Remove now-empty web_static directory
+        run('rm -rf {}/web_static'.format(release_path))
+        
+        # Remove existing symbolic link
+        run('rm -rf /data/web_static/current')
+        
+        # Create new symbolic link
+        run('ln -s {}/ /data/web_static/current'.format(release_path))
         
         print('New version deployed!')
         return True
-    except Exception:
+        
+    except Exception as e:
+        print(e)
         return False
